@@ -1,124 +1,84 @@
-from datetime import datetime, timezone, timedelta
-import json
 import os
 import requests
 
-# --- CONFIGURAÇÕES DE AMBIENTE ---
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+# 1. Carregar as Secrets configuradas no GitHub Actions
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# API do Google Flights no RapidAPI (Nikita Iakovlev)
-RAPIDAPI_HOST = "google-flights-api.p.rapidapi.com"
+# 2. Configurações da API de Voos (Baseado no RapidAPI)
+URL = "https://google-flights-api.p.rapidapi.com/search"
 
-# --- CONFIGURAÇÃO DA VIAGEM ---
-ORIGEM = "GRU"          # Aeroporto de Origem (ex: Guarulhos)
-DESTINO = "MCZ"         # Aeroporto de Destino (ex: Maceió)
-DATA_IDA = "2027-01-01" # Data ajustada para 01/01/2027
-PRECO_MAXIMO = 800.0    # Teto de preço máximo em Reais (R$)
+headers = {
+    "X-RapidAPI-Key": RAPIDAPI_KEY,
+    "X-RapidAPI-Host": "google-flights-api.p.rapidapi.com"
+}
 
-ARQUIVO_HISTORICO = "historico_precos.json"
+# Parâmetros oficiais exigidos pelo esquema da API
+params = {
+    "origin": "GRU",
+    "destination": "MCZ",
+    "departureDate": "2027-01-01",
+    "currency": "BRL",
+    "adults": 1,
+    "cabinClass": "economy"
+}
 
 def enviar_telegram(mensagem):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Erro: Credenciais do Telegram não configuradas.")
-        return False
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    """Envia alerta direto para o seu chat do Telegram"""
+    url_telegram = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": mensagem,
         "parse_mode": "Markdown"
     }
     try:
-        resp = requests.post(url, json=payload, timeout=10)
-        return resp.status_code == 200
+        response = requests.post(url_telegram, json=payload)
+        if response.status_code == 200:
+            print("Mensagem enviada com sucesso para o Telegram!")
+        else:
+            print(f"Erro ao enviar para o Telegram: {response.text}")
     except Exception as e:
-        print(f"Erro ao enviar mensagem: {e}")
-        return False
+        print(f"Falha de conexão com o Telegram: {e}")
 
-def buscar_voo():
-    if not RAPIDAPI_KEY:
-        print("Erro: RAPIDAPI_KEY não configurada.")
-        return None
-
-    url = f"https://{RAPIDAPI_HOST}/search"
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": RAPIDAPI_HOST
-    }
-    params = {
-        "departure_id": ORIGEM,
-        "arrival_id": DESTINO,
-        "outbound_date": DATA_IDA,
-        "currency": "BRL",
-        "hl": "pt"
-    }
-
+def verificar_voos():
+    print("Iniciando verificação de voos GRU -> MCZ (01/01/2027)...")
+    
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response = requests.get(URL, headers=headers, params=params)
         print(f"Status da API: {response.status_code}")
         
         if response.status_code == 200:
             dados = response.json()
-            lista_voos = dados.get("best_flights", []) or dados.get("other_flights", [])
-            if lista_voos:
-                primeiro = lista_voos[0]
-                return {
-                    "preco": float(primeiro.get("price", 0)),
-                    "link": "https://www.google.com/travel/flights"
-                }
+            
+            # Tenta extrair os voos da resposta da API
+            # (A estrutura exata costuma vir em listas de voos ou iterários)
+            voos = dados.get("data", []) or dados.get("flights", []) or dados.get("itineraries", [])
+            
+            if voos:
+                # Pega o primeiro voo (geralmente o mais barato/melhor)
+                melhor_voo = voos[0]
+                preco = melhor_voo.get("price", "Preço sob consulta")
+                
+                mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
+                           f"📍 Rota: GRU ➡️ MCZ\n" \
+                           f"📅 Data: 01/01/2027\n" \
+                           f"💰 Menor Preço: {preco}"
+                
+                enviar_telegram(mensagem)
+            else:
+                # Caso a API retorne com sucesso mas sem voos exatos estruturados na lista padrão
+                # Vamos enviar um aviso genérico de que o endpoint respondeu bem
+                print("A API respondeu com sucesso, mas a estrutura de dados precisa de ajuste nos campos.")
+                enviar_telegram("🤖 O monitor de voos executou, a API respondeu 200, mas precisamos refinar a leitura do preço.")
+                
+        elif response.status_code == 403:
+            print("Erro 403: Acesso negado. Verifique se a RAPIDAPI_KEY nas Secrets está correta e sem espaços extras.")
+        else:
+            print(f"A API retornou um código inesperado: {response.status_code} - {response.text}")
+            
     except Exception as e:
-        print(f"Erro na requisição: {e}")
-
-    return None
-
-def main():
-    print("Iniciando verificação de voos...")
-    
-    menor_historico = 999999.0
-    if os.path.exists(ARQUIVO_HISTORICO):
-        try:
-            with open(ARQUIVO_HISTORICO, "r") as f:
-                menor_historico = json.load(f).get("menor_preco", 999999.0)
-        except Exception:
-            pass
-
-    voo = buscar_voo()
-
-    if voo:
-        preco_atual = voo["preco"]
-        print(f"Preço encontrado: R$ {preco_atual}")
-
-        if preco_atual <= PRECO_MAXIMO or preco_atual < menor_historico:
-            msg_promo = (
-                f"✈️ *ALERTA DE PASSAGEM BARATA!* ✈️\n\n"
-                f"📍 *Rota:* {ORIGEM} ➡️ {DESTINO}\n"
-                f"📅 *Data:* {DATA_IDA}\n"
-                f"💰 *Preço Atual:* R$ {preco_atual:.2f}\n\n"
-                f"🔗 [Ver no Google Flights]({voo['link']})"
-            )
-            enviar_telegram(msg_promo)
-
-            if preco_atual < menor_historico:
-                menor_historico = preco_atual
-                with open(ARQUIVO_HISTORICO, "w") as f:
-                    json.dump({"menor_preco": menor_historico}, f)
-
-    # --- STATUS DIÁRIO NO TELEGRAM ---
-    try:
-        fuso_br = timezone(timedelta(hours=-3))
-        data_hora = datetime.now(fuso_br).strftime('%d/%m/%Y %H:%M')
-    except Exception:
-        data_hora = datetime.now().strftime('%d/%m/%Y %H:%M')
-
-    status_msg = (
-        "🤖 *Status do Bot de Voos*\n"
-        f"🕒 *Verificado em:* {data_hora}\n"
-        f"🎯 *Rota:* {ORIGEM} ➡️ {DESTINO} ({DATA_IDA})\n"
-        f"📊 *Menor preço registado:* R$ {menor_historico if menor_historico != 999999 else 'N/A'}\n"
-        "🟢 *Status:* Monitoramento ativo!"
-    )
-    enviar_telegram(status_msg)
+        print(f"Erro na execução da requisição: {e}")
 
 if __name__ == "__main__":
-    main()
+    verificar_voos()
