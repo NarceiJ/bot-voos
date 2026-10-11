@@ -14,8 +14,8 @@ RAPIDAPI_HOST = "google-flights-api.p.rapidapi.com"
 # --- CONFIGURAÇÃO DA VIAGEM ---
 ORIGEM = "GRU"          # Aeroporto de Origem (ex: Guarulhos)
 DESTINO = "MCZ"         # Aeroporto de Destino (ex: Maceió)
-DATA_IDA = "2026-12-01" # Data do voo (AAAA-MM-DD)
-PRECO_MAXIMO = 750.0    # Teto de preço em Reais (R$)
+DATA_IDA = "2027-01-01" # Data ajustada para 01/01/2027
+PRECO_MAXIMO = 800.0    # Teto de preço máximo em Reais (R$)
 
 ARQUIVO_HISTORICO = "historico_precos.json"
 
