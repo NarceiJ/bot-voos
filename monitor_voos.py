@@ -7,7 +7,7 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # 2. Configurações da API de Voos (Baseado no RapidAPI)
-URL = "https://google-flights-api.p.rapidapi.com/search"
+URL = "https://google-flights-api4.p.rapidapi.com/search"
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
