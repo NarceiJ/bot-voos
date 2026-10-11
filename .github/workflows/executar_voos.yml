@@ -1,0 +1,39 @@
+name: Executar Bot de Voos
+
+on:
+  schedule:
+    # Roda uma vez por dia às 09:00 UTC (06:00 da manhã no Brasil) para economizar cota
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Permite testar manualmente a qualquer momento
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar Dependências
+        run: |
+          pip install requests
+
+      - name: Executar Script de Voos
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        run: python monitor_voos.py
+
+      - name: Salvar Histórico de Preços
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Atualiza histórico de preços de voos [skip ci]"
+          file_pattern: historico_precos.json
