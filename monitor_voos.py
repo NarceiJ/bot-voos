@@ -2,7 +2,7 @@ import os
 import time
 import requests
 
-# 1. Carregar as Secrets
+# 1. Carregar as Secrets do GitHub Actions
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -49,16 +49,13 @@ def verificar_voos():
         
         if response.status_code in [200, 202]:
             dados = response.json()
-            
-            # Se retornar um pollUrl, precisamos aguardar e buscar os resultados
             poll_url = dados.get("pollUrl")
             
             if poll_url:
                 print("Job iniciado em segundo plano. Aguardando processamento...")
                 
-                # Tenta consultar o resultado até 5 vezes (aguardando alguns segundos entre cada tentativa)
                 for tentativa in range(6):
-                    time.sleep(10) # espera 10 segundos
+                    time.sleep(10)
                     print(f"Tentativa {tentativa + 1} de buscar resultados...")
                     
                     poll_response = requests.get(poll_url, headers=headers)
@@ -71,11 +68,20 @@ def verificar_voos():
                             voos = poll_data.get("items", []) or poll_data.get("data", [])
                             if voos:
                                 melhor_voo = voos[0]
+                                
+                                # Extraindo detalhes úteis
                                 preco = melhor_voo.get("priceLabel", melhor_voo.get("price", "Preço sob consulta"))
+                                companhia = melhor_voo.get("airline", "Não informada")
+                                escalas = melhor_voo.get("stops", 0)
+                                
+                                # Formata a indicação de escalas
+                                tipo_voo = "Voo Direto ✈️" if escalas == 0 else f"{escalas} escala(s)"
                                 
                                 mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
                                            f"📍 Rota: GRU ➡️ MCZ\n" \
                                            f"📅 Data: 01/01/2027\n" \
+                                           f"🏢 Companhia: {companhia}\n" \
+                                           f"🔄 Tipo: {tipo_voo}\n" \
                                            f"💰 Menor Preço: {preco}"
                                 
                                 enviar_telegram(mensagem)
@@ -86,12 +92,21 @@ def verificar_voos():
                 
                 print("Tempo limite excedido aguardando os resultados da pesquisa.")
             else:
-                # Caso já venha direto na resposta
                 voos = dados.get("items", []) or dados.get("data", [])
                 if voos:
                     melhor_voo = voos[0]
                     preco = melhor_voo.get("priceLabel", "Preço sob consulta")
-                    enviar_telegram(f"✈️ *Voo GRU ➡️ MCZ (01/01/2027)*\n💰 Menor Preço: {preco}")
+                    companhia = melhor_voo.get("airline", "Não informada")
+                    escalas = melhor_voo.get("stops", 0)
+                    tipo_voo = "Voo Direto ✈️" if escalas == 0 else f"{escalas} escala(s)"
+                    
+                    mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
+                               f"📍 Rota: GRU ➡️ MCZ\n" \
+                               f"📅 Data: 01/01/2027\n" \
+                               f"🏢 Companhia: {companhia}\n" \
+                               f"🔄 Tipo: {tipo_voo}\n" \
+                               f"💰 Menor Preço: {preco}"
+                    enviar_telegram(mensagem)
         else:
             print(f"A API retornou um código inesperado: {response.status_code} - {response.text}")
             
