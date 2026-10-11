@@ -6,16 +6,17 @@ RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# 2. Configurações da API de Voos (Baseado no RapidAPI)
-URL = "https://google-flights-api4.p.rapidapi.com/search"
+# 2. Configurações da API com o endpoint e host corretos
+URL = "https://google-flights-api4.p.rapidapi.com/v1/google-flights-scraper/run"
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
-    "X-RapidAPI-Host": "google-flights-api4.p.rapidapi.com"
+    "X-RapidAPI-Host": "google-flights-api4.p.rapidapi.com",
+    "Content-Type": "application/json"
 }
 
-# Parâmetros oficiais exigidos pelo esquema da API
-params = {
+# Parâmetros enviados no corpo (payload) do POST
+payload = {
     "origin": "GRU",
     "destination": "MCZ",
     "departureDate": "2027-01-01",
@@ -27,13 +28,13 @@ params = {
 def enviar_telegram(mensagem):
     """Envia alerta direto para o seu chat do Telegram"""
     url_telegram = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
+    body = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": mensagem,
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url_telegram, json=payload)
+        response = requests.post(url_telegram, json=body)
         if response.status_code == 200:
             print("Mensagem enviada com sucesso para o Telegram!")
         else:
@@ -45,18 +46,17 @@ def verificar_voos():
     print("Iniciando verificação de voos GRU -> MCZ (01/01/2027)...")
     
     try:
-        response = requests.get(URL, headers=headers, params=params)
+        # Mudamos de GET para POST e enviamos como 'json=payload'
+        response = requests.post(URL, headers=headers, json=payload)
         print(f"Status da API: {response.status_code}")
         
         if response.status_code == 200:
             dados = response.json()
             
-            # Tenta extrair os voos da resposta da API
-            # (A estrutura exata costuma vir em listas de voos ou iterários)
-            voos = dados.get("data", []) or dados.get("flights", []) or dados.get("itineraries", [])
+            # Dependendo de como a resposta é devolvida, procuramos nas chaves comuns
+            voos = dados if isinstance(dados, list) else dados.get("data", []) or dados.get("flights", []) or dados.get("itineraries", [])
             
             if voos:
-                # Pega o primeiro voo (geralmente o mais barato/melhor)
                 melhor_voo = voos[0]
                 preco = melhor_voo.get("price", "Preço sob consulta")
                 
@@ -67,13 +67,9 @@ def verificar_voos():
                 
                 enviar_telegram(mensagem)
             else:
-                # Caso a API retorne com sucesso mas sem voos exatos estruturados na lista padrão
-                # Vamos enviar um aviso genérico de que o endpoint respondeu bem
-                print("A API respondeu com sucesso, mas a estrutura de dados precisa de ajuste nos campos.")
-                enviar_telegram("🤖 O monitor de voos executou, a API respondeu 200, mas precisamos refinar a leitura do preço.")
+                print("A API respondeu com sucesso (200), mas a lista de voos veio vazia.")
+                enviar_telegram("🤖 O monitor executou com sucesso (Status 200), mas nenhum voo foi retornado na lista.")
                 
-        elif response.status_code == 403:
-            print("Erro 403: Acesso negado. Verifique se a RAPIDAPI_KEY nas Secrets está correta e sem espaços extras.")
         else:
             print(f"A API retornou um código inesperado: {response.status_code} - {response.text}")
             
