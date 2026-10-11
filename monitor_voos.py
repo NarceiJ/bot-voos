@@ -1,12 +1,12 @@
 import os
+import time
 import requests
 
-# 1. Carregar as Secrets configuradas no GitHub Actions
+# 1. Carregar as Secrets
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# 2. Configurações da API com o endpoint e host corretos
 URL = "https://google-flights-api4.p.rapidapi.com/v1/google-flights-scraper/run"
 
 headers = {
@@ -15,7 +15,6 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# Parâmetros enviados no corpo (payload) do POST
 payload = {
     "origin": "GRU",
     "destination": "MCZ",
@@ -26,7 +25,6 @@ payload = {
 }
 
 def enviar_telegram(mensagem):
-    """Envia alerta direto para o seu chat do Telegram"""
     url_telegram = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     body = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -46,30 +44,54 @@ def verificar_voos():
     print("Iniciando verificação de voos GRU -> MCZ (01/01/2027)...")
     
     try:
-        # Mudamos de GET para POST e enviamos como 'json=payload'
         response = requests.post(URL, headers=headers, json=payload)
-        print(f"Status da API: {response.status_code}")
+        print(f"Status inicial da API: {response.status_code}")
         
-        if response.status_code == 200:
+        if response.status_code in [200, 202]:
             dados = response.json()
             
-            # Dependendo de como a resposta é devolvida, procuramos nas chaves comuns
-            voos = dados if isinstance(dados, list) else dados.get("data", []) or dados.get("flights", []) or dados.get("itineraries", [])
+            # Se retornar um pollUrl, precisamos aguardar e buscar os resultados
+            poll_url = dados.get("pollUrl")
             
-            if voos:
-                melhor_voo = voos[0]
-                preco = melhor_voo.get("price", "Preço sob consulta")
+            if poll_url:
+                print("Job iniciado em segundo plano. Aguardando processamento...")
                 
-                mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
-                           f"📍 Rota: GRU ➡️ MCZ\n" \
-                           f"📅 Data: 01/01/2027\n" \
-                           f"💰 Menor Preço: {preco}"
+                # Tenta consultar o resultado até 5 vezes (aguardando alguns segundos entre cada tentativa)
+                for tentativa in range(6):
+                    time.sleep(10) # espera 10 segundos
+                    print(f"Tentativa {tentativa + 1} de buscar resultados...")
+                    
+                    poll_response = requests.get(poll_url, headers=headers)
+                    if poll_response.status_code == 200:
+                        poll_data = poll_response.json()
+                        status_job = poll_data.get("status")
+                        print(f"Status atual do job: {status_job}")
+                        
+                        if status_job == "SUCCEEDED":
+                            voos = poll_data.get("items", []) or poll_data.get("data", [])
+                            if voos:
+                                melhor_voo = voos[0]
+                                preco = melhor_voo.get("priceLabel", melhor_voo.get("price", "Preço sob consulta"))
+                                
+                                mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
+                                           f"📍 Rota: GRU ➡️ MCZ\n" \
+                                           f"📅 Data: 01/01/2027\n" \
+                                           f"💰 Menor Preço: {preco}"
+                                
+                                enviar_telegram(mensagem)
+                                return
+                        elif status_job in ["FAILED", "ABORTED"]:
+                            print("O processamento da pesquisa falhou no servidor da API.")
+                            break
                 
-                enviar_telegram(mensagem)
+                print("Tempo limite excedido aguardando os resultados da pesquisa.")
             else:
-                print("A API respondeu com sucesso (200), mas a lista de voos veio vazia.")
-                enviar_telegram("🤖 O monitor executou com sucesso (Status 200), mas nenhum voo foi retornado na lista.")
-                
+                # Caso já venha direto na resposta
+                voos = dados.get("items", []) or dados.get("data", [])
+                if voos:
+                    melhor_voo = voos[0]
+                    preco = melhor_voo.get("priceLabel", "Preço sob consulta")
+                    enviar_telegram(f"✈️ *Voo GRU ➡️ MCZ (01/01/2027)*\n💰 Menor Preço: {preco}")
         else:
             print(f"A API retornou um código inesperado: {response.status_code} - {response.text}")
             
