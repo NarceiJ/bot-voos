@@ -11,7 +11,7 @@ URL = "https://google-flights-api4.p.rapidapi.com/search"
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
-    "X-RapidAPI-Host": "google-flights-api.p.rapidapi.com"
+    "X-RapidAPI-Host": "google-flights-api4.p.rapidapi.com"
 }
 
 # Parâmetros oficiais exigidos pelo esquema da API
