@@ -69,12 +69,12 @@ def verificar_voos():
                             if voos:
                                 melhor_voo = voos[0]
                                 
-                                # Extraindo detalhes úteis
+                                # Extraindo detalhes úteis incluindo o link direto
                                 preco = melhor_voo.get("priceLabel", melhor_voo.get("price", "Preço sob consulta"))
                                 companhia = melhor_voo.get("airline", "Não informada")
                                 escalas = melhor_voo.get("stops", 0)
+                                link_voo = melhor_voo.get("googleFlightsUrl", "https://www.google.com/travel/flights")
                                 
-                                # Formata a indicação de escalas
                                 tipo_voo = "Voo Direto ✈️" if escalas == 0 else f"{escalas} escala(s)"
                                 
                                 mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
@@ -82,7 +82,8 @@ def verificar_voos():
                                            f"📅 Data: 01/01/2027\n" \
                                            f"🏢 Companhia: {companhia}\n" \
                                            f"🔄 Tipo: {tipo_voo}\n" \
-                                           f"💰 Menor Preço: {preco}"
+                                           f"💰 Menor Preço: {preco}\n\n" \
+                                           f"🔗 [Ver Voo no Google Flights]({link_voo})"
                                 
                                 enviar_telegram(mensagem)
                                 return
@@ -98,6 +99,7 @@ def verificar_voos():
                     preco = melhor_voo.get("priceLabel", "Preço sob consulta")
                     companhia = melhor_voo.get("airline", "Não informada")
                     escalas = melhor_voo.get("stops", 0)
+                    link_voo = melhor_voo.get("googleFlightsUrl", "https://www.google.com/travel/flights")
                     tipo_voo = "Voo Direto ✈️" if escalas == 0 else f"{escalas} escala(s)"
                     
                     mensagem = f"✈️ *Alerta de Voo Encontrado!*\n\n" \
@@ -105,7 +107,9 @@ def verificar_voos():
                                f"📅 Data: 01/01/2027\n" \
                                f"🏢 Companhia: {companhia}\n" \
                                f"🔄 Tipo: {tipo_voo}\n" \
-                               f"💰 Menor Preço: {preco}"
+                               f"💰 Menor Preço: {preco}\n\n" \
+                               f"🔗 [Ver Voo no Google Flights]({link_voo})"
+                    
                     enviar_telegram(mensagem)
         else:
             print(f"A API retornou um código inesperado: {response.status_code} - {response.text}")
