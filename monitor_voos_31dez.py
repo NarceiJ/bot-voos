@@ -13,13 +13,14 @@ headers = {
     "X-RapidAPI-Host": "google-flights-scraper.p.rapidapi.com"
 }
 
-# Parâmetros com a moeda forçada para BRL (Reais)
+# Parâmetros com filtro estrito para voos diretos e moeda em Reais
 params = {
     "origin": "GRU",
     "destination": "MCZ",
     "departure_date": "2026-12-31",
     "adults": 1,
     "cabin_class": "economy",
+    "max_stops": "nonstop",  # <-- Filtra apenas voos sem escala
     "currency": "BRL",
     "sort_by": "cheapest"
 }
@@ -41,7 +42,7 @@ def enviar_telegram(mensagem):
         print(f"Falha de conexão com o Telegram: {e}")
 
 def verificar_voos():
-    print("Iniciando verificação de voos GRU -> MCZ (31/12/2026) em Reais...")
+    print("Iniciando verificação de voos DIRETO GRU -> MCZ (31/12/2026)...")
     
     try:
         response = requests_import.get(URL, headers=headers, params=params)
@@ -54,28 +55,24 @@ def verificar_voos():
             if voos:
                 melhor_voo = voos[0]
                 
-                # Extração dos campos corrigidos
                 preco = melhor_voo.get("price", "Sob consulta")
                 moeda = melhor_voo.get("currency", "BRL")
                 companhia = melhor_voo.get("airline_name", "Não informada")
-                escalas = melhor_voo.get("stops", 0)
                 
-                tipo_voo = "Voo Direto ✈️" if escalas == 0 else f"{escalas} escala(s)"
-                
-                # Montando o link direto para o Google Flights com os parâmetros da rota
+                # Link direto para o Google Flights focado na rota
                 link_google_flights = f"https://www.google.com/travel/flights?q=flights+from+GRU+to+MCZ+on+2026-12-31"
                 
-                mensagem = f"✈️ *Alerta de Voo Encontrado (31/12)*\n\n" \
+                mensagem = f"✈️ *Alerta de Voo Direto (31/12)*\n\n" \
                            f"📍 Rota: GRU ➡️ MCZ\n" \
                            f"📅 Data: 31/12/2026\n" \
                            f"🏢 Companhia: {companhia}\n" \
-                           f"🔄 Tipo: {tipo_voo}\n" \
+                           f"🔄 Tipo: Voo Direto ✈️\n" \
                            f"💰 Menor Preço: {moeda} {preco}\n\n" \
                            f"🔗 [Ver Voo no Google Flights]({link_google_flights})"
                 
                 enviar_telegram(mensagem)
             else:
-                print("Nenhum voo encontrado para os parâmetros informados.")
+                print("Nenhum voo direto encontrado para os parâmetros informados.")
         else:
             print(f"Erro na API: {response.status_code} - {response.text}")
             
